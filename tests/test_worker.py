@@ -41,6 +41,28 @@ def test_worker_continues_after_one_file_fails(qapp, tmp_path, monkeypatch):
     ]
 
 
+def test_worker_stops_early_when_stop_requested_before_run(qapp, tmp_path, monkeypatch):
+    class _Model:
+        def transcribe(self, path, task):
+            return {"text": "x"}
+
+    monkeypatch.setattr(worker_module, "get_model", lambda: _Model())
+
+    a = tmp_path / "a.ogg"
+    b = tmp_path / "b.ogg"
+    a.write_bytes(b"fake")
+    b.write_bytes(b"fake")
+
+    w = TranscriptionWorker([(0, a), (1, b)])
+    statuses = []
+    w.status_changed.connect(lambda i, s: statuses.append((i, s)))
+
+    w.request_stop()
+    w.run()
+
+    assert statuses == []
+
+
 def test_worker_emits_model_load_failed_and_processes_nothing(qapp, tmp_path, monkeypatch):
     def _raise():
         raise RuntimeError("CUDA not available")

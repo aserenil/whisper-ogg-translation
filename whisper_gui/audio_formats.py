@@ -17,6 +17,8 @@ def is_supported(path: Path) -> bool:
 
 def validate_path(raw_path: str) -> Path:
     stripped = raw_path.strip()
+    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in "\"'":
+        stripped = stripped[1:-1].strip()
     if not stripped:
         raise ValueError("No file path given.")
     path = Path(stripped)

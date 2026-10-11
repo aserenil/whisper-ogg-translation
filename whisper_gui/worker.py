@@ -14,6 +14,10 @@ class TranscriptionWorker(QThread):
     def __init__(self, items: list[tuple[int, Path]], parent=None):
         super().__init__(parent)
         self.items = items
+        self._stop_requested = False
+
+    def request_stop(self) -> None:
+        self._stop_requested = True
 
     def run(self) -> None:
         try:
@@ -23,6 +27,8 @@ class TranscriptionWorker(QThread):
             return
 
         for index, path in self.items:
+            if self._stop_requested:
+                break
             self.status_changed.emit(index, "Transcribing")
             try:
                 original = transcribe_original(model, path)

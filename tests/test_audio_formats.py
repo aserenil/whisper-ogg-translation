@@ -36,3 +36,11 @@ def test_validate_path_accepts_supported_existing_file(tmp_path):
     audio_file.write_bytes(b"fake audio bytes")
     result = validate_path(str(audio_file))
     assert result == audio_file
+
+
+def test_validate_path_strips_surrounding_quotes_from_copy_as_path(tmp_path):
+    audio_file = tmp_path / "voice.ogg"
+    audio_file.write_bytes(b"fake audio bytes")
+    quoted = f'"{audio_file}"'
+    result = validate_path(quoted)
+    assert result == audio_file

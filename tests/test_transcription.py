@@ -45,3 +45,18 @@ def test_save_transcripts_writes_both_files(tmp_path):
     original_path, english_path = save_transcripts(source, "hola", "hello")
     assert original_path.read_text(encoding="utf-8") == "hola"
     assert english_path.read_text(encoding="utf-8") == "hello"
+
+
+def test_save_transcripts_backs_up_existing_files_instead_of_destroying_them(tmp_path):
+    source = tmp_path / "voice.ogg"
+    existing_original = tmp_path / "voice.txt"
+    existing_english = tmp_path / "voice.en.txt"
+    existing_original.write_text("pre-existing notes", encoding="utf-8")
+    existing_english.write_text("pre-existing english notes", encoding="utf-8")
+
+    save_transcripts(source, "hola", "hello")
+
+    assert (tmp_path / "voice.txt").read_text(encoding="utf-8") == "hola"
+    assert (tmp_path / "voice.en.txt").read_text(encoding="utf-8") == "hello"
+    assert (tmp_path / "voice.txt.bak").read_text(encoding="utf-8") == "pre-existing notes"
+    assert (tmp_path / "voice.en.txt.bak").read_text(encoding="utf-8") == "pre-existing english notes"

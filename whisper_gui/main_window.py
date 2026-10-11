@@ -171,3 +171,19 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _copy(panel: QPlainTextEdit) -> None:
         QGuiApplication.clipboard().setText(panel.toPlainText())
+
+    def closeEvent(self, event) -> None:
+        if self.worker is not None and self.worker.isRunning():
+            response = QMessageBox.question(
+                self,
+                "Transcription in progress",
+                "A batch is still running. Quit anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if response != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            self.worker.request_stop()
+            self.worker.wait()
+        event.accept()
