@@ -7,8 +7,8 @@ class _FailingOnBadFileModel:
         if "bad" in path and task == "transcribe":
             raise RuntimeError("decode failed")
         if task == "transcribe":
-            return {"text": "original text"}
-        return {"text": "english text"}
+            return {"text": "original text", "segments": []}
+        return {"text": "english text", "segments": []}
 
 
 def test_worker_continues_after_one_file_fails(qapp, tmp_path, monkeypatch):
@@ -28,7 +28,7 @@ def test_worker_continues_after_one_file_fails(qapp, tmp_path, monkeypatch):
     results = []
     w.status_changed.connect(lambda i, s: statuses.append((i, s)))
     w.error.connect(lambda i, m: errors.append((i, m)))
-    w.result_ready.connect(lambda i, o, e: results.append((i, o, e)))
+    w.result_ready.connect(lambda i, o, o_segs, e, e_segs: results.append((i, o, e)))
 
     w.run()
 
@@ -44,7 +44,7 @@ def test_worker_continues_after_one_file_fails(qapp, tmp_path, monkeypatch):
 def test_worker_stops_early_when_stop_requested_before_run(qapp, tmp_path, monkeypatch):
     class _Model:
         def transcribe(self, path, task):
-            return {"text": "x"}
+            return {"text": "x", "segments": []}
 
     monkeypatch.setattr(worker_module, "get_model", lambda: _Model())
 
@@ -76,7 +76,7 @@ def test_worker_emits_model_load_failed_and_processes_nothing(qapp, tmp_path, mo
     failures = []
     results = []
     w.model_load_failed.connect(lambda msg: failures.append(msg))
-    w.result_ready.connect(lambda i, o, e: results.append((i, o, e)))
+    w.result_ready.connect(lambda i, o, o_segs, e, e_segs: results.append((i, o, e)))
 
     w.run()
 

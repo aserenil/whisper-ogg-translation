@@ -7,7 +7,7 @@ from .transcription import get_model, save_transcripts, transcribe_original, tra
 
 class TranscriptionWorker(QThread):
     status_changed = Signal(int, str)
-    result_ready = Signal(int, str, str)
+    result_ready = Signal(int, str, object, str, object)
     error = Signal(int, str)
     model_load_failed = Signal(str)
 
@@ -31,13 +31,13 @@ class TranscriptionWorker(QThread):
                 break
             self.status_changed.emit(index, "Transcribing")
             try:
-                original = transcribe_original(model, path)
+                original, original_segments = transcribe_original(model, path)
                 self.status_changed.emit(index, "Translating")
-                english = translate_to_english(model, path)
-                save_transcripts(path, original, english)
+                english, english_segments = translate_to_english(model, path)
+                save_transcripts(path, original, original_segments, english, english_segments)
             except Exception as exc:
                 self.error.emit(index, str(exc))
                 self.status_changed.emit(index, "Error")
                 continue
-            self.result_ready.emit(index, original, english)
+            self.result_ready.emit(index, original, original_segments, english, english_segments)
             self.status_changed.emit(index, "Done")
