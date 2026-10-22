@@ -1,6 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+
+from whisper_gui.segments import Segment
 
 
 class QueueStatus(Enum):
@@ -18,6 +20,8 @@ class QueueItem:
     original_text: str | None = None
     english_text: str | None = None
     error_message: str | None = None
+    original_segments: list[Segment] = field(default_factory=list)
+    english_segments: list[Segment] = field(default_factory=list)
 
 
 class QueueModel:
@@ -37,10 +41,19 @@ class QueueModel:
     def set_status(self, index: int, status: QueueStatus) -> None:
         self._items[index].status = status
 
-    def set_result(self, index: int, original: str, english: str) -> None:
+    def set_result(
+        self,
+        index: int,
+        original: str,
+        original_segments: list[Segment],
+        english: str,
+        english_segments: list[Segment],
+    ) -> None:
         item = self._items[index]
         item.original_text = original
+        item.original_segments = original_segments
         item.english_text = english
+        item.english_segments = english_segments
         item.status = QueueStatus.DONE
 
     def set_error(self, index: int, message: str) -> None:
