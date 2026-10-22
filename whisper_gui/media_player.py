@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QVBoxLayout,
     QWidget,
@@ -35,6 +36,10 @@ class MediaPlayerWidget(QWidget):
         self.video_widget = QVideoWidget(self)
         self.player.setVideoOutput(self.video_widget)
         self.video_widget.setVisible(False)
+        self.video_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.video_widget.setMinimumSize(320, 240)
         self.player.hasVideoChanged.connect(self.video_widget.setVisible)
 
         self._repeat_target: tuple[int, int] | None = None

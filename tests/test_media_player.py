@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 from PySide6.QtMultimedia import QMediaPlayer
+from PySide6.QtWidgets import QSizePolicy
 
 from whisper_gui.media_player import SPEED_OPTIONS, MediaPlayerWidget, clamp_rewind
 
@@ -59,3 +60,11 @@ def test_player_error_shows_in_status_label(qapp):
     widget = MediaPlayerWidget(player=fake_player)
     widget._on_error(QMediaPlayer.Error.FormatError, "codec not supported")
     assert widget.status_label.text() == "codec not supported"
+
+
+def test_video_widget_expands_and_has_a_usable_minimum_size(qapp):
+    widget = MediaPlayerWidget()
+    policy = widget.video_widget.sizePolicy()
+    assert policy.verticalPolicy() == QSizePolicy.Policy.Expanding
+    assert policy.horizontalPolicy() == QSizePolicy.Policy.Expanding
+    assert widget.video_widget.minimumHeight() >= 240
