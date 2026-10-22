@@ -55,9 +55,13 @@ class MainWindow(QMainWindow):
         self.start_button = QPushButton("Start")
         self.start_button.clicked.connect(self._start_batch)
 
+        self.retranscribe_button = QPushButton("Re-transcribe selected")
+        self.retranscribe_button.clicked.connect(self._on_retranscribe_clicked)
+
         queue_box = QVBoxLayout()
         queue_box.addLayout(top_bar)
         queue_box.addWidget(self.queue_list)
+        queue_box.addWidget(self.retranscribe_button)
         queue_box.addWidget(self.start_button)
 
         sidebar_widget = QWidget()
@@ -158,6 +162,14 @@ class MainWindow(QMainWindow):
             self.queue_list.addItem(f"{path.name} — {QueueStatus.QUEUED.value}")
 
         self.address_bar.clear()
+
+    def _on_retranscribe_clicked(self) -> None:
+        row = self.queue_list.currentRow()
+        if row < 0:
+            return
+        self.queue_model.set_status(row, QueueStatus.QUEUED)
+        path = self.queue_model[row].path
+        self.queue_list.item(row).setText(f"{path.name} — {QueueStatus.QUEUED.value}")
 
     def _start_batch(self) -> None:
         pending = self.queue_model.pending_items()

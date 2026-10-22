@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QMessageBox
 from whisper_gui import worker as worker_module
 from whisper_gui.main_window import MainWindow
 from whisper_gui.media_player import MediaPlayerWidget
+from whisper_gui.queue_model import QueueStatus
 from whisper_gui.segments import Segment
 from whisper_gui.transcription import save_transcripts
 
@@ -123,6 +124,29 @@ def test_selecting_row_with_only_txt_falls_back_to_plain_text(qapp, tmp_path):
 
     assert window.original_panel.list_widget.count() == 0
     assert window.english_panel.list_widget.count() == 0
+
+
+def test_clicking_retranscribe_requeues_the_selected_done_row(qapp, tmp_path):
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+    (tmp_path / "voice.txt").write_text("hola", encoding="utf-8")
+    (tmp_path / "voice.en.txt").write_text("hello", encoding="utf-8")
+
+    window = MainWindow()
+    window._add_path(str(source))
+    window.queue_list.setCurrentRow(0)
+    assert window.queue_model[0].status == QueueStatus.DONE
+
+    window._on_retranscribe_clicked()
+
+    assert window.queue_model[0].status == QueueStatus.QUEUED
+    assert window.queue_model.pending_items() == [(0, source)]
+    assert window.queue_list.item(0).text() == f"{source.name} — Queued"
+
+
+def test_retranscribe_noops_when_no_row_selected(qapp, tmp_path):
+    window = MainWindow()
+    window._on_retranscribe_clicked()
 
 
 def test_add_path_still_adds_row_when_existing_transcript_load_raises(qapp, tmp_path, monkeypatch):
