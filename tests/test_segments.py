@@ -35,3 +35,17 @@ def test_segment_at_returns_none_outside_all_segments():
     segs = [Segment(start_ms=1000, end_ms=2000, text="a")]
     assert segment_at(segs, 500) is None
     assert segment_at(segs, 2000) is None
+
+
+def test_parse_srt_round_trips_a_segment_with_empty_text():
+    # Whisper emits zero-length/blank segments with text="" on silence; our own
+    # writer must round-trip them, not crash on the extra blank line they add.
+    segs = [
+        Segment(start_ms=0, end_ms=1000, text=""),
+        Segment(start_ms=1000, end_ms=2000, text="b"),
+    ]
+    assert parse_srt(segments_to_srt(segs)) == segs
+
+
+def test_parse_srt_skips_a_block_with_no_timestamp_line_instead_of_raising():
+    assert parse_srt("not a valid srt file") == []

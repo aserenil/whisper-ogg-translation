@@ -112,3 +112,13 @@ def test_load_existing_transcripts_empty_segments_when_srt_missing(tmp_path):
     assert loaded.original_text == "hola"
     assert loaded.original_segments == []
     assert loaded.english_segments == []
+
+
+def test_load_existing_transcripts_empty_segments_when_srt_is_undecodable(tmp_path):
+    source = tmp_path / "voice.ogg"
+    (tmp_path / "voice.txt").write_text("hola", encoding="utf-8")
+    (tmp_path / "voice.en.txt").write_text("hello", encoding="utf-8")
+    (tmp_path / "voice.srt").write_bytes(b"\xff\xfe\x00\x01not utf-8")
+
+    loaded = load_existing_transcripts(source)
+    assert loaded.original_segments == []

@@ -125,6 +125,25 @@ def test_selecting_row_with_only_txt_falls_back_to_plain_text(qapp, tmp_path):
     assert window.english_panel.list_widget.count() == 0
 
 
+def test_add_path_still_adds_row_when_existing_transcript_load_raises(qapp, tmp_path, monkeypatch):
+    import whisper_gui.main_window as main_window_module
+
+    def _raise(path):
+        raise RuntimeError("corrupt srt")
+
+    monkeypatch.setattr(main_window_module, "load_existing_transcripts", _raise)
+
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+
+    window = MainWindow()
+    window._add_path(str(source))
+
+    assert len(window.queue_model) == 1
+    assert window.queue_list.count() == 1
+    assert window.queue_model[0].status == window.queue_model[0].status.QUEUED
+
+
 def test_clicking_original_line_sets_repeat_target_on_player(qapp, tmp_path, monkeypatch):
     # `line_activated.connect(self.media_player.set_repeat_target)` in MainWindow.__init__
     # captures a bound method at connect time, so patching the instance *after*

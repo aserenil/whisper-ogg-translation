@@ -138,7 +138,11 @@ class MainWindow(QMainWindow):
             return
         index = self.queue_model.add(path)
 
-        loaded = load_existing_transcripts(path)
+        try:
+            loaded = load_existing_transcripts(path)
+        except Exception:
+            loaded = None
+
         if loaded is not None:
             self.queue_model.set_result(
                 index,

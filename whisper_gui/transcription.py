@@ -88,7 +88,11 @@ class LoadedTranscript:
 def _load_segments(path: Path) -> list[Segment]:
     if not path.exists():
         return []
-    return parse_srt(path.read_text(encoding="utf-8"))
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return []
+    return parse_srt(content)
 
 
 def load_existing_transcripts(source: Path) -> LoadedTranscript | None:

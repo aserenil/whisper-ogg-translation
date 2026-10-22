@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 
 
@@ -16,7 +17,7 @@ def _format_timestamp(ms: int) -> str:
 
 
 def _parse_timestamp(timestamp: str) -> int:
-    hms, millis = timestamp.split(",")
+    hms, millis = timestamp.strip().replace(".", ",").split(",")
     hours, minutes, seconds = hms.split(":")
     return (
         int(hours) * 3_600_000
@@ -37,12 +38,17 @@ def segments_to_srt(segments: list[Segment]) -> str:
 
 def parse_srt(content: str) -> list[Segment]:
     segments = []
-    for block in content.strip().split("\n\n"):
+    for block in re.split(r"\n{2,}", content.strip()):
         if not block.strip():
             continue
         lines = block.splitlines()
-        _, timestamp_line, *text_lines = lines
-        start_str, end_str = timestamp_line.split(" --> ")
+        timestamp_index = next(
+            (i for i, line in enumerate(lines) if " --> " in line), None
+        )
+        if timestamp_index is None:
+            continue
+        start_str, end_str = lines[timestamp_index].split(" --> ")
+        text_lines = lines[timestamp_index + 1 :]
         segments.append(
             Segment(
                 start_ms=_parse_timestamp(start_str),
