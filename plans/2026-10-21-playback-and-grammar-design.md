@@ -1,6 +1,9 @@
 # Design: Synced playback and on-demand grammar analysis
 
-Status: **draft for review**. Extends `2026-10-11-whisper-gui-transcription-design.md`.
+Status: **approved**. Extends `2026-10-11-whisper-gui-transcription-design.md`.
+Implemented as two sequential plans: Plan A (synced playback: timing,
+player, timed-line transcript, seek/repeat) then Plan B (grammar tab),
+since the two are independent subsystems.
 
 ## Intent
 
@@ -118,7 +121,19 @@ processes rows that are still Queued, as today.
 - Errors (missing key, network, rate limit, refusal) show in the status
   line; nothing is saved on failure.
 
-### Decisions I made (not confirmed by the user)
+### Decisions (confirmed by the user on 2026-10-21)
+
+- Qt's FFmpeg-backed multimedia player was verified against real files on
+  this machine: a WhatsApp voice note (Opus-in-Ogg, 48kHz mono) and a
+  WhatsApp video (H.264/mp4) both load cleanly with `QMediaPlayer`
+  (`mediaStatusChanged` reaches `LoadedMedia`, `errorOccurred` never
+  fires). No transcoding fallback is needed; playback errors still show
+  in the status area per the original design, for formats not covered by
+  this check.
+- Grammar analysis model: `claude-opus-5-5`, as originally proposed.
+- All other items below: confirmed as originally proposed, unchanged.
+
+### Decisions I made (not confirmed by the user) [legacy heading — all items above are now confirmed]
 
 - Model: `claude-opus-5-5` through the official `anthropic` Python SDK,
   default client (reads credentials from environment / `ant auth login`
