@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Callable
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
@@ -10,7 +12,6 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QPushButton,
     QSplitter,
     QVBoxLayout,
@@ -18,7 +19,10 @@ from PySide6.QtWidgets import (
 )
 
 from .audio_formats import FILE_DIALOG_FILTER, validate_path
-from .queue_model import QueueModel, QueueStatus
+from .media_player import MediaPlayerWidget
+from .queue_model import QueueItem, QueueModel, QueueStatus
+from .timed_transcript_panel import TimedTranscriptPanel
+from .transcription import load_existing_transcripts
 from .worker import TranscriptionWorker
 
 
@@ -56,15 +60,22 @@ class MainWindow(QMainWindow):
         queue_box.addWidget(self.queue_list)
         queue_box.addWidget(self.start_button)
 
-        self.original_panel = QPlainTextEdit()
-        self.original_panel.setReadOnly(True)
-        self.english_panel = QPlainTextEdit()
-        self.english_panel.setReadOnly(True)
+        sidebar_widget = QWidget()
+        sidebar_widget.setLayout(queue_box)
+
+        self.media_player = MediaPlayerWidget()
+
+        self.original_panel = TimedTranscriptPanel()
+        self.english_panel = TimedTranscriptPanel()
 
         original_copy = QPushButton("Copy")
-        original_copy.clicked.connect(lambda: self._copy(self.original_panel))
+        original_copy.clicked.connect(
+            lambda: self._copy_current(lambda item: item.original_text)
+        )
         english_copy = QPushButton("Copy")
-        english_copy.clicked.connect(lambda: self._copy(self.english_panel))
+        english_copy.clicked.connect(
+            lambda: self._copy_current(lambda item: item.english_text)
+        )
 
         original_header = QHBoxLayout()
         original_header.addWidget(QLabel("Original language"))
@@ -90,17 +101,24 @@ class MainWindow(QMainWindow):
         panels_layout.addWidget(original_widget)
         panels_layout.addWidget(english_widget)
 
-        queue_widget = QWidget()
-        queue_widget.setLayout(queue_box)
+        right_splitter = QSplitter(Qt.Orientation.Vertical)
+        right_splitter.addWidget(self.media_player)
+        right_splitter.addWidget(panels_widget)
 
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(queue_widget)
-        splitter.addWidget(panels_widget)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_splitter.addWidget(sidebar_widget)
+        main_splitter.addWidget(right_splitter)
 
         central = QWidget()
         central_layout = QVBoxLayout(central)
-        central_layout.addWidget(splitter)
+        central_layout.addWidget(main_splitter)
         self.setCentralWidget(central)
+
+        self.media_player.position_changed.connect(self.original_panel.update_position)
+        self.media_player.position_changed.connect(self.english_panel.update_position)
+        self.original_panel.seek_requested.connect(self.media_player.seek)
+        self.english_panel.seek_requested.connect(self.media_player.seek)
+        self.original_panel.line_activated.connect(self.media_player.set_repeat_target)
 
     def _add_from_address_bar(self) -> None:
         self._add_path(self.address_bar.text())
@@ -118,8 +136,21 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             QMessageBox.warning(self, "Cannot add file", str(exc))
             return
-        self.queue_model.add(path)
-        self.queue_list.addItem(f"{path.name} — {QueueStatus.QUEUED.value}")
+        index = self.queue_model.add(path)
+
+        loaded = load_existing_transcripts(path)
+        if loaded is not None:
+            self.queue_model.set_result(
+                index,
+                loaded.original_text,
+                loaded.original_segments,
+                loaded.english_text,
+                loaded.english_segments,
+            )
+            self.queue_list.addItem(f"{path.name} — {QueueStatus.DONE.value}")
+        else:
+            self.queue_list.addItem(f"{path.name} — {QueueStatus.QUEUED.value}")
+
         self.address_bar.clear()
 
     def _start_batch(self) -> None:
@@ -142,11 +173,12 @@ class MainWindow(QMainWindow):
         path = self.queue_model[index].path
         item.setText(f"{path.name} — {status}")
 
-    def _on_result_ready(self, index: int, original: str, english: str) -> None:
-        self.queue_model.set_result(index, original, english)
+    def _on_result_ready(
+        self, index: int, original: str, original_segments, english: str, english_segments
+    ) -> None:
+        self.queue_model.set_result(index, original, original_segments, english, english_segments)
         if self.queue_list.currentRow() == index:
-            self.original_panel.setPlainText(original)
-            self.english_panel.setPlainText(english)
+            self._populate_panels(self.queue_model[index])
 
     def _on_error(self, index: int, message: str) -> None:
         self.queue_model.set_error(index, message)
@@ -159,18 +191,32 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(True)
         self.worker = None
 
+    def _populate_panels(self, item: QueueItem) -> None:
+        if item.original_segments:
+            self.original_panel.set_segments(item.original_segments)
+        else:
+            self.original_panel.set_plain_text(item.original_text or "")
+
+        if item.english_segments:
+            self.english_panel.set_segments(item.english_segments)
+        else:
+            self.english_panel.set_plain_text(item.english_text or "")
+
     def _on_selection_changed(self, row: int) -> None:
         if row < 0 or row >= len(self.queue_model):
             self.original_panel.clear()
             self.english_panel.clear()
+            self.media_player.stop()
             return
         item = self.queue_model[row]
-        self.original_panel.setPlainText(item.original_text or "")
-        self.english_panel.setPlainText(item.english_text or "")
+        self._populate_panels(item)
+        self.media_player.load(item.path)
 
-    @staticmethod
-    def _copy(panel: QPlainTextEdit) -> None:
-        QGuiApplication.clipboard().setText(panel.toPlainText())
+    def _copy_current(self, getter: Callable[[QueueItem], str | None]) -> None:
+        row = self.queue_list.currentRow()
+        if row < 0:
+            return
+        QGuiApplication.clipboard().setText(getter(self.queue_model[row]) or "")
 
     def closeEvent(self, event) -> None:
         if self.worker is not None and self.worker.isRunning():

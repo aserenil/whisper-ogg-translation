@@ -5,12 +5,15 @@ from PySide6.QtWidgets import QMessageBox
 
 from whisper_gui import worker as worker_module
 from whisper_gui.main_window import MainWindow
+from whisper_gui.media_player import MediaPlayerWidget
+from whisper_gui.segments import Segment
+from whisper_gui.transcription import save_transcripts
 
 
 class _SlowModel:
     def transcribe(self, path, task):
         time.sleep(0.2)
-        return {"text": "x"}
+        return {"text": "x", "segments": []}
 
 
 def test_close_event_stops_running_worker_before_accepting(qapp, tmp_path, monkeypatch):
@@ -38,3 +41,110 @@ def test_close_event_stops_running_worker_before_accepting(qapp, tmp_path, monke
 
     assert event.isAccepted()
     assert window.worker.isRunning() is False
+
+
+def test_selecting_a_row_loads_existing_transcript_without_queuing(qapp, tmp_path):
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+    segs = [Segment(start_ms=0, end_ms=1000, text="hola")]
+    save_transcripts(source, "hola", segs, "hello", segs)
+
+    window = MainWindow()
+    window._add_path(str(source))
+
+    assert window.queue_model[0].status.value == "Done"
+    assert window.queue_model[0].original_segments == segs
+    assert window.queue_model.pending_items() == []
+
+
+def test_selecting_a_row_loads_its_file_into_the_media_player(qapp, tmp_path, monkeypatch):
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+
+    window = MainWindow()
+    loaded_paths = []
+    monkeypatch.setattr(window.media_player, "load", lambda path: loaded_paths.append(path))
+    window._add_path(str(source))
+    window.queue_list.setCurrentRow(0)
+
+    assert loaded_paths == [source]
+
+
+def test_selecting_a_different_row_stops_the_previous_media(qapp, tmp_path, monkeypatch):
+    a = tmp_path / "a.ogg"
+    b = tmp_path / "b.ogg"
+    a.write_bytes(b"fake")
+    b.write_bytes(b"fake")
+
+    window = MainWindow()
+    load_calls = []
+    monkeypatch.setattr(window.media_player, "load", lambda path: load_calls.append(path))
+    window._add_path(str(a))
+    window._add_path(str(b))
+
+    window.queue_list.setCurrentRow(0)
+    window.queue_list.setCurrentRow(1)
+
+    assert load_calls == [a, b]
+
+
+def test_result_ready_populates_independent_timed_panels_for_the_selected_row(qapp, tmp_path):
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+
+    window = MainWindow()
+    window._add_path(str(source))
+    window.queue_list.setCurrentRow(0)
+
+    # Two independent Whisper passes: different segment counts and timings.
+    original_segs = [
+        Segment(start_ms=0, end_ms=1000, text="hola"),
+        Segment(start_ms=1000, end_ms=2000, text="mundo"),
+    ]
+    english_segs = [Segment(start_ms=0, end_ms=2000, text="hello world")]
+    window._on_result_ready(0, "hola mundo", original_segs, "hello world", english_segs)
+
+    assert window.original_panel.list_widget.count() == 2
+    assert window.english_panel.list_widget.count() == 1
+    window.media_player.position_changed.emit(1500)
+    assert window.original_panel.list_widget.currentRow() == 1
+    assert window.english_panel.list_widget.currentRow() == 0
+
+
+def test_selecting_row_with_only_txt_falls_back_to_plain_text(qapp, tmp_path):
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+    (tmp_path / "voice.txt").write_text("hola", encoding="utf-8")
+    (tmp_path / "voice.en.txt").write_text("hello", encoding="utf-8")
+
+    window = MainWindow()
+    window._add_path(str(source))
+    window.queue_list.setCurrentRow(0)
+
+    assert window.original_panel.list_widget.count() == 0
+    assert window.english_panel.list_widget.count() == 0
+
+
+def test_clicking_original_line_sets_repeat_target_on_player(qapp, tmp_path, monkeypatch):
+    # `line_activated.connect(self.media_player.set_repeat_target)` in MainWindow.__init__
+    # captures a bound method at connect time, so patching the instance *after*
+    # construction would not be seen by that connection — patch the class first.
+    targets = []
+    monkeypatch.setattr(
+        MediaPlayerWidget, "set_repeat_target",
+        lambda self, s, e: targets.append((s, e)),
+    )
+
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+
+    window = MainWindow()
+    window._add_path(str(source))
+    window.queue_list.setCurrentRow(0)
+
+    segs = [Segment(start_ms=0, end_ms=1000, text="hola")]
+    window._on_result_ready(0, "hola", segs, "hello", segs)
+
+    window.original_panel._on_item_clicked(window.original_panel.list_widget.item(0))
+
+    assert targets == [(0, 1000)]
