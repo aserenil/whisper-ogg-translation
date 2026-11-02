@@ -61,6 +61,9 @@ class QueueModel:
         item.error_message = message
         item.status = QueueStatus.ERROR
 
+    def sort_by_name(self, descending: bool = False) -> None:
+        self._items.sort(key=lambda item: item.path.name.lower(), reverse=descending)
+
     def pending_items(self) -> list[tuple[int, Path]]:
         return [
             (i, item.path)

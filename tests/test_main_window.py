@@ -149,6 +149,73 @@ def test_retranscribe_noops_when_no_row_selected(qapp, tmp_path):
     window._on_retranscribe_clicked()
 
 
+def test_clicking_sort_toggles_name_order_ascending_then_descending(qapp, tmp_path):
+    banana = tmp_path / "banana.ogg"
+    apple = tmp_path / "apple.ogg"
+    banana.write_bytes(b"fake")
+    apple.write_bytes(b"fake")
+
+    window = MainWindow()
+    window._add_path(str(banana))
+    window._add_path(str(apple))
+
+    window._on_sort_clicked()
+    assert [window.queue_list.item(i).text().split(" — ")[0] for i in range(2)] == [
+        "apple.ogg", "banana.ogg",
+    ]
+
+    window._on_sort_clicked()
+    assert [window.queue_list.item(i).text().split(" — ")[0] for i in range(2)] == [
+        "banana.ogg", "apple.ogg",
+    ]
+
+
+def test_sorting_preserves_selection_by_file_not_row_index(qapp, tmp_path):
+    banana = tmp_path / "banana.ogg"
+    apple = tmp_path / "apple.ogg"
+    banana.write_bytes(b"fake")
+    apple.write_bytes(b"fake")
+
+    window = MainWindow()
+    window._add_path(str(banana))
+    window._add_path(str(apple))
+    window.queue_list.setCurrentRow(0)
+
+    window._on_sort_clicked()
+
+    assert window.queue_list.currentRow() == 1
+    assert window.queue_model[window.queue_list.currentRow()].path == banana
+
+
+def test_sort_click_while_batch_running_does_not_reorder(qapp, tmp_path, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+    monkeypatch.setattr(worker_module, "get_model", lambda: _SlowModel())
+
+    banana = tmp_path / "banana.ogg"
+    apple = tmp_path / "apple.ogg"
+    banana.write_bytes(b"fake")
+    apple.write_bytes(b"fake")
+
+    window = MainWindow()
+    window._add_path(str(banana))
+    window._add_path(str(apple))
+    window._start_batch()
+
+    for _ in range(100):
+        if window.worker is not None and window.worker.isRunning():
+            break
+        time.sleep(0.01)
+    assert window.worker.isRunning()
+
+    window._on_sort_clicked()
+
+    assert window.queue_model[0].path == banana
+    assert window.queue_model[1].path == apple
+
+    window.worker.request_stop()
+    window.worker.wait()
+
+
 def test_add_path_still_adds_row_when_existing_transcript_load_raises(qapp, tmp_path, monkeypatch):
     import whisper_gui.main_window as main_window_module
 

@@ -49,6 +49,10 @@ class MainWindow(QMainWindow):
         top_bar.addWidget(browse_button)
         top_bar.addWidget(add_button)
 
+        self._sort_descending = False
+        self.sort_button = QPushButton("Sort: Name A→Z")
+        self.sort_button.clicked.connect(self._on_sort_clicked)
+
         self.queue_list = QListWidget()
         self.queue_list.currentRowChanged.connect(self._on_selection_changed)
 
@@ -60,6 +64,7 @@ class MainWindow(QMainWindow):
 
         queue_box = QVBoxLayout()
         queue_box.addLayout(top_bar)
+        queue_box.addWidget(self.sort_button)
         queue_box.addWidget(self.queue_list)
         queue_box.addWidget(self.retranscribe_button)
         queue_box.addWidget(self.start_button)
@@ -162,6 +167,36 @@ class MainWindow(QMainWindow):
             self.queue_list.addItem(f"{path.name} — {QueueStatus.QUEUED.value}")
 
         self.address_bar.clear()
+
+    def _on_sort_clicked(self) -> None:
+        if self.worker is not None and self.worker.isRunning():
+            QMessageBox.information(
+                self,
+                "Cannot sort",
+                "Cannot reorder the queue while transcription is running.",
+            )
+            return
+
+        current_row = self.queue_list.currentRow()
+        selected_path = self.queue_model[current_row].path if current_row >= 0 else None
+
+        self.queue_model.sort_by_name(descending=self._sort_descending)
+        self._sort_descending = not self._sort_descending
+        self.sort_button.setText(
+            "Sort: Name Z→A" if self._sort_descending else "Sort: Name A→Z"
+        )
+
+        self.queue_list.blockSignals(True)
+        self.queue_list.clear()
+        for i in range(len(self.queue_model)):
+            item = self.queue_model[i]
+            self.queue_list.addItem(f"{item.path.name} — {item.status.value}")
+        if selected_path is not None:
+            for i in range(len(self.queue_model)):
+                if self.queue_model[i].path == selected_path:
+                    self.queue_list.setCurrentRow(i)
+                    break
+        self.queue_list.blockSignals(False)
 
     def _on_retranscribe_clicked(self) -> None:
         row = self.queue_list.currentRow()

@@ -57,3 +57,38 @@ def test_pending_items_returns_only_queued_items_with_original_index(tmp_path):
     model.set_error(1, "boom")
     pending = model.pending_items()
     assert pending == [(2, model[2].path)]
+
+
+def test_sort_by_name_orders_items_ascending_case_insensitively(tmp_path):
+    model = QueueModel()
+    model.add(tmp_path / "Banana.ogg")
+    model.add(tmp_path / "apple.ogg")
+    model.add(tmp_path / "Cherry.ogg")
+    model.sort_by_name()
+    assert [model[i].path.name for i in range(len(model))] == [
+        "apple.ogg", "Banana.ogg", "Cherry.ogg",
+    ]
+
+
+def test_sort_by_name_descending_reverses_the_order(tmp_path):
+    model = QueueModel()
+    model.add(tmp_path / "Banana.ogg")
+    model.add(tmp_path / "apple.ogg")
+    model.add(tmp_path / "Cherry.ogg")
+    model.sort_by_name(descending=True)
+    assert [model[i].path.name for i in range(len(model))] == [
+        "Cherry.ogg", "Banana.ogg", "apple.ogg",
+    ]
+
+
+def test_sort_by_name_preserves_item_data(tmp_path):
+    model = QueueModel()
+    model.add(tmp_path / "b.ogg")
+    model.add(tmp_path / "a.ogg")
+    model.set_result(0, "hola", [], "hello", [])
+    model.sort_by_name()
+    assert model[0].path.name == "a.ogg"
+    assert model[0].status == QueueStatus.QUEUED
+    assert model[1].path.name == "b.ogg"
+    assert model[1].original_text == "hola"
+    assert model[1].status == QueueStatus.DONE
