@@ -8,6 +8,8 @@ dependencies = [
     "openai-whisper>=20250625",
     "torch>=2.4",
     "pyside6>=6.7",
+    "anthropic>=2.4.0",
+    "python-dotenv>=1.2.4",
 ]
 
 [dependency-groups]
