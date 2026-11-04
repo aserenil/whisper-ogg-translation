@@ -14,11 +14,15 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from .audio_formats import FILE_DIALOG_FILTER, validate_path
+from .grammar_analysis import load_existing_analysis
+from .grammar_panel import GrammarPanel
+from .grammar_worker import GrammarWorker
 from .media_player import MediaPlayerWidget
 from .queue_model import QueueItem, QueueModel, QueueStatus
 from .timed_transcript_panel import TimedTranscriptPanel
@@ -110,9 +114,17 @@ class MainWindow(QMainWindow):
         panels_layout.addWidget(original_widget)
         panels_layout.addWidget(english_widget)
 
+        self.grammar_panel = GrammarPanel()
+        self.grammar_panel.analyze_requested.connect(self._on_analyze_clicked)
+        self.grammar_worker: GrammarWorker | None = None
+
+        self.content_tabs = QTabWidget()
+        self.content_tabs.addTab(panels_widget, "Transcript")
+        self.content_tabs.addTab(self.grammar_panel, "Grammar")
+
         right_splitter = QSplitter(Qt.Orientation.Vertical)
         right_splitter.addWidget(self.media_player)
-        right_splitter.addWidget(panels_widget)
+        right_splitter.addWidget(self.content_tabs)
         right_splitter.setStretchFactor(0, 3)
         right_splitter.setStretchFactor(1, 2)
 
@@ -165,6 +177,13 @@ class MainWindow(QMainWindow):
             self.queue_list.addItem(f"{path.name} — {QueueStatus.DONE.value}")
         else:
             self.queue_list.addItem(f"{path.name} — {QueueStatus.QUEUED.value}")
+
+        try:
+            grammar_text = load_existing_analysis(path)
+        except Exception:
+            grammar_text = None
+        if grammar_text is not None:
+            self.queue_model.set_grammar(index, grammar_text)
 
         self.address_bar.clear()
 
@@ -260,10 +279,65 @@ class MainWindow(QMainWindow):
             self.original_panel.clear()
             self.english_panel.clear()
             self.media_player.stop()
+            self._update_grammar_panel_for_row(row)
             return
         item = self.queue_model[row]
         self._populate_panels(item)
         self.media_player.load(item.path)
+        self._update_grammar_panel_for_row(row)
+
+    def _update_grammar_panel_for_row(self, row: int) -> None:
+        if row < 0 or row >= len(self.queue_model):
+            self.grammar_panel.clear()
+            self.grammar_panel.set_analyze_enabled(False)
+            return
+        item = self.queue_model[row]
+        if item.grammar_text:
+            self.grammar_panel.set_result(item.grammar_text)
+        else:
+            self.grammar_panel.clear()
+        busy = self.grammar_worker is not None and self.grammar_worker.isRunning()
+        self.grammar_panel.set_analyze_enabled(item.status == QueueStatus.DONE and not busy)
+
+    def _on_analyze_clicked(self) -> None:
+        row = self.queue_list.currentRow()
+        if row < 0:
+            return
+        item = self.queue_model[row]
+        if item.status != QueueStatus.DONE:
+            return
+        if self.grammar_worker is not None and self.grammar_worker.isRunning():
+            return
+        if item.grammar_text is not None:
+            response = QMessageBox.question(
+                self,
+                "Re-analyze",
+                "This will use API tokens again. Continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if response != QMessageBox.StandardButton.Yes:
+                return
+        self.grammar_panel.set_analyze_enabled(False)
+        self.grammar_panel.set_status("Analyzing...")
+        self.grammar_worker = GrammarWorker(row, item.path, item.original_text or "", item.english_text or "")
+        self.grammar_worker.result_ready.connect(self._on_grammar_result)
+        self.grammar_worker.error.connect(self._on_grammar_error)
+        self.grammar_worker.finished.connect(self._on_grammar_finished)
+        self.grammar_worker.start()
+
+    def _on_grammar_result(self, index: int, text: str) -> None:
+        self.queue_model.set_grammar(index, text)
+        if self.queue_list.currentRow() == index:
+            self.grammar_panel.set_result(text)
+
+    def _on_grammar_error(self, index: int, message: str) -> None:
+        if self.queue_list.currentRow() == index:
+            self.grammar_panel.set_status(message)
+
+    def _on_grammar_finished(self) -> None:
+        self.grammar_worker = None
+        self._update_grammar_panel_for_row(self.queue_list.currentRow())
 
     def _copy_current(self, getter: Callable[[QueueItem], str | None]) -> None:
         row = self.queue_list.currentRow()
@@ -272,17 +346,22 @@ class MainWindow(QMainWindow):
         QGuiApplication.clipboard().setText(getter(self.queue_model[row]) or "")
 
     def closeEvent(self, event) -> None:
-        if self.worker is not None and self.worker.isRunning():
+        transcription_running = self.worker is not None and self.worker.isRunning()
+        grammar_running = self.grammar_worker is not None and self.grammar_worker.isRunning()
+        if transcription_running or grammar_running:
             response = QMessageBox.question(
                 self,
-                "Transcription in progress",
-                "A batch is still running. Quit anyway?",
+                "Work in progress",
+                "A transcription or grammar analysis is still running. Quit anyway?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
             if response != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
-            self.worker.request_stop()
-            self.worker.wait()
+            if transcription_running:
+                self.worker.request_stop()
+                self.worker.wait()
+            if grammar_running:
+                self.grammar_worker.wait()
         event.accept()
