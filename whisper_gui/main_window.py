@@ -188,11 +188,13 @@ class MainWindow(QMainWindow):
         self.address_bar.clear()
 
     def _on_sort_clicked(self) -> None:
-        if self.worker is not None and self.worker.isRunning():
+        transcription_running = self.worker is not None and self.worker.isRunning()
+        grammar_running = self.grammar_worker is not None and self.grammar_worker.isRunning()
+        if transcription_running or grammar_running:
             QMessageBox.information(
                 self,
                 "Cannot sort",
-                "Cannot reorder the queue while transcription is running.",
+                "Cannot reorder the queue while transcription or grammar analysis is running.",
             )
             return
 
@@ -224,6 +226,7 @@ class MainWindow(QMainWindow):
         self.queue_model.set_status(row, QueueStatus.QUEUED)
         path = self.queue_model[row].path
         self.queue_list.item(row).setText(f"{path.name} — {QueueStatus.QUEUED.value}")
+        self._refresh_grammar_analyze_enabled(self.queue_list.currentRow())
 
     def _start_batch(self) -> None:
         pending = self.queue_model.pending_items()
@@ -244,6 +247,7 @@ class MainWindow(QMainWindow):
         item = self.queue_list.item(index)
         path = self.queue_model[index].path
         item.setText(f"{path.name} — {status}")
+        self._refresh_grammar_analyze_enabled(self.queue_list.currentRow())
 
     def _on_result_ready(
         self, index: int, original: str, original_segments, english: str, english_segments
@@ -251,6 +255,7 @@ class MainWindow(QMainWindow):
         self.queue_model.set_result(index, original, original_segments, english, english_segments)
         if self.queue_list.currentRow() == index:
             self._populate_panels(self.queue_model[index])
+        self._refresh_grammar_analyze_enabled(self.queue_list.currentRow())
 
     def _on_error(self, index: int, message: str) -> None:
         self.queue_model.set_error(index, message)
@@ -296,6 +301,13 @@ class MainWindow(QMainWindow):
             self.grammar_panel.set_result(item.grammar_text)
         else:
             self.grammar_panel.clear()
+        self._refresh_grammar_analyze_enabled(row)
+
+    def _refresh_grammar_analyze_enabled(self, row: int) -> None:
+        if row < 0 or row >= len(self.queue_model):
+            self.grammar_panel.set_analyze_enabled(False)
+            return
+        item = self.queue_model[row]
         busy = self.grammar_worker is not None and self.grammar_worker.isRunning()
         self.grammar_panel.set_analyze_enabled(item.status == QueueStatus.DONE and not busy)
 
@@ -337,7 +349,7 @@ class MainWindow(QMainWindow):
 
     def _on_grammar_finished(self) -> None:
         self.grammar_worker = None
-        self._update_grammar_panel_for_row(self.queue_list.currentRow())
+        self._refresh_grammar_analyze_enabled(self.queue_list.currentRow())
 
     def _copy_current(self, getter: Callable[[QueueItem], str | None]) -> None:
         row = self.queue_list.currentRow()

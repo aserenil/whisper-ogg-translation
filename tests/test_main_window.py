@@ -21,7 +21,7 @@ class _SlowModel:
 
 class _FakeGrammarMessages:
     def create(self, **kwargs):
-        return SimpleNamespace(content=[SimpleNamespace(text="# Analysis")])
+        return SimpleNamespace(content=[SimpleNamespace(text="# Analysis")], stop_reason="end_turn")
 
 
 class _FakeGrammarClient:
@@ -32,7 +32,7 @@ class _FakeGrammarClient:
 class _SlowGrammarMessages:
     def create(self, **kwargs):
         time.sleep(0.2)
-        return SimpleNamespace(content=[SimpleNamespace(text="# Analysis")])
+        return SimpleNamespace(content=[SimpleNamespace(text="# Analysis")], stop_reason="end_turn")
 
 
 class _SlowGrammarClient:
@@ -425,3 +425,75 @@ def test_add_path_still_adds_row_when_existing_grammar_file_load_raises(qapp, tm
 
     assert len(window.queue_model) == 1
     assert window.queue_model[0].grammar_text is None
+
+
+def test_grammar_worker_finishing_does_not_clear_an_error_still_shown_for_that_row(qapp, tmp_path):
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+    window = MainWindow()
+    window._add_path(str(source))
+    window.queue_list.setCurrentRow(0)
+    window._on_result_ready(0, "hola", [], "hello", [])
+
+    window._on_grammar_error(0, "rate limit exceeded")
+    window._on_grammar_finished()
+
+    assert window.grammar_panel.status_label.text() == "rate limit exceeded"
+
+
+def test_sort_click_while_grammar_analysis_running_does_not_reorder(qapp, tmp_path, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+    monkeypatch.setattr(grammar_worker_module, "get_client", lambda: _SlowGrammarClient())
+
+    banana = tmp_path / "banana.ogg"
+    apple = tmp_path / "apple.ogg"
+    banana.write_bytes(b"fake")
+    apple.write_bytes(b"fake")
+
+    window = MainWindow()
+    window._add_path(str(banana))
+    window._add_path(str(apple))
+    window.queue_list.setCurrentRow(0)
+    window._on_result_ready(0, "hola", [], "hello", [])
+
+    window._on_analyze_clicked()
+    for _ in range(100):
+        if window.grammar_worker is not None and window.grammar_worker.isRunning():
+            break
+        time.sleep(0.01)
+    assert window.grammar_worker.isRunning()
+
+    window._on_sort_clicked()
+
+    assert window.queue_model[0].path == banana
+    assert window.queue_model[1].path == apple
+
+    window.grammar_worker.wait()
+
+
+def test_status_changed_to_done_enables_analyze_for_the_selected_row(qapp, tmp_path):
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+    window = MainWindow()
+    window._add_path(str(source))
+    window.queue_list.setCurrentRow(0)
+    assert window.grammar_panel.analyze_button.isEnabled() is False
+
+    window._on_status_changed(0, "Done")
+
+    assert window.grammar_panel.analyze_button.isEnabled() is True
+
+
+def test_retranscribe_disables_analyze_for_the_selected_row(qapp, tmp_path):
+    source = tmp_path / "voice.ogg"
+    source.write_bytes(b"fake")
+    (tmp_path / "voice.txt").write_text("hola", encoding="utf-8")
+    (tmp_path / "voice.en.txt").write_text("hello", encoding="utf-8")
+    window = MainWindow()
+    window._add_path(str(source))
+    window.queue_list.setCurrentRow(0)
+    assert window.grammar_panel.analyze_button.isEnabled() is True
+
+    window._on_retranscribe_clicked()
+
+    assert window.grammar_panel.analyze_button.isEnabled() is False

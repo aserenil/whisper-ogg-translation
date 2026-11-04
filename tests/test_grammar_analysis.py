@@ -18,12 +18,29 @@ from whisper_gui.grammar_analysis import (
 class _FakeMessages:
     def create(self, **kwargs):
         self.received_kwargs = kwargs
-        return SimpleNamespace(content=[SimpleNamespace(text="# Grammar analysis\n...")])
+        return SimpleNamespace(
+            content=[SimpleNamespace(text="# Grammar analysis\n...")],
+            stop_reason="end_turn",
+        )
 
 
 class _FakeClient:
     def __init__(self):
         self.messages = _FakeMessages()
+
+
+class _StopReasonMessages:
+    def __init__(self, stop_reason, content=None):
+        self._stop_reason = stop_reason
+        self._content = content if content is not None else [SimpleNamespace(text="# Analysis")]
+
+    def create(self, **kwargs):
+        return SimpleNamespace(content=self._content, stop_reason=self._stop_reason)
+
+
+class _StopReasonClient:
+    def __init__(self, stop_reason, content=None):
+        self.messages = _StopReasonMessages(stop_reason, content)
 
 
 def test_build_prompt_includes_both_texts():
@@ -66,6 +83,24 @@ def test_analyze_raises_without_calling_the_client_when_text_is_too_long():
     with pytest.raises(ValueError):
         analyze(client, long_text, "")
     assert not hasattr(client.messages, "received_kwargs")
+
+
+def test_analyze_raises_when_response_is_cut_off_at_max_tokens():
+    client = _StopReasonClient("max_tokens")
+    with pytest.raises(RuntimeError):
+        analyze(client, "hola", "hello")
+
+
+def test_analyze_raises_when_claude_refuses():
+    client = _StopReasonClient("refusal")
+    with pytest.raises(RuntimeError):
+        analyze(client, "hola", "hello")
+
+
+def test_analyze_raises_when_response_has_no_content_blocks():
+    client = _StopReasonClient("end_turn", content=[])
+    with pytest.raises(RuntimeError):
+        analyze(client, "hola", "hello")
 
 
 def test_get_client_raises_when_no_api_key_is_configured(monkeypatch):

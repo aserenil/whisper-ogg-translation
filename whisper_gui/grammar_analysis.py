@@ -44,6 +44,14 @@ def analyze(client, original_text: str, english_text: str) -> str:
         max_tokens=4096,
         messages=[{"role": "user", "content": build_prompt(original_text, english_text)}],
     )
+    if response.stop_reason == "max_tokens":
+        raise RuntimeError(
+            "Claude's response was cut off before completing (hit the token limit)."
+        )
+    if response.stop_reason == "refusal":
+        raise RuntimeError("Claude declined to analyze this transcript.")
+    if not response.content:
+        raise RuntimeError("Claude returned an empty response.")
     return response.content[0].text
 
 
