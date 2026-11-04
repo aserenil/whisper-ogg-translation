@@ -92,3 +92,18 @@ def test_sort_by_name_preserves_item_data(tmp_path):
     assert model[1].path.name == "b.ogg"
     assert model[1].original_text == "hola"
     assert model[1].status == QueueStatus.DONE
+
+
+def test_new_queue_item_has_no_grammar_text_by_default(tmp_path):
+    model = QueueModel()
+    model.add(tmp_path / "voice.ogg")
+    assert model[0].grammar_text is None
+
+
+def test_set_grammar_stores_text_without_changing_status(tmp_path):
+    model = QueueModel()
+    model.add(tmp_path / "voice.ogg")
+    model.set_result(0, "hola", [], "hello", [])
+    model.set_grammar(0, "# Analysis")
+    assert model[0].grammar_text == "# Analysis"
+    assert model[0].status == QueueStatus.DONE

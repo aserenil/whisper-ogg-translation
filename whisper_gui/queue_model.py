@@ -22,6 +22,7 @@ class QueueItem:
     error_message: str | None = None
     original_segments: list[Segment] = field(default_factory=list)
     english_segments: list[Segment] = field(default_factory=list)
+    grammar_text: str | None = None
 
 
 class QueueModel:
@@ -60,6 +61,9 @@ class QueueModel:
         item = self._items[index]
         item.error_message = message
         item.status = QueueStatus.ERROR
+
+    def set_grammar(self, index: int, text: str) -> None:
+        self._items[index].grammar_text = text
 
     def sort_by_name(self, descending: bool = False) -> None:
         self._items.sort(key=lambda item: item.path.name.lower(), reverse=descending)
