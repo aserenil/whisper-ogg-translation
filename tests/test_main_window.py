@@ -21,7 +21,9 @@ class _SlowModel:
 
 class _FakeGrammarMessages:
     def create(self, **kwargs):
-        return SimpleNamespace(content=[SimpleNamespace(text="# Analysis")], stop_reason="end_turn")
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="# Analysis")], stop_reason="end_turn"
+        )
 
 
 class _FakeGrammarClient:
@@ -32,7 +34,9 @@ class _FakeGrammarClient:
 class _SlowGrammarMessages:
     def create(self, **kwargs):
         time.sleep(0.2)
-        return SimpleNamespace(content=[SimpleNamespace(text="# Analysis")], stop_reason="end_turn")
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="# Analysis")], stop_reason="end_turn"
+        )
 
 
 class _SlowGrammarClient:

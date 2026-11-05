@@ -20,7 +20,7 @@ class _FakeMessages:
     def create(self, **kwargs):
         self.received_kwargs = kwargs
         return SimpleNamespace(
-            content=[SimpleNamespace(text="# Grammar analysis\n...")],
+            content=[SimpleNamespace(type="text", text="# Grammar analysis\n...")],
             stop_reason="end_turn",
         )
 
@@ -33,7 +33,9 @@ class _FakeClient:
 class _StopReasonMessages:
     def __init__(self, stop_reason, content=None):
         self._stop_reason = stop_reason
-        self._content = content if content is not None else [SimpleNamespace(text="# Analysis")]
+        self._content = (
+            content if content is not None else [SimpleNamespace(type="text", text="# Analysis")]
+        )
 
     def create(self, **kwargs):
         return SimpleNamespace(content=self._content, stop_reason=self._stop_reason)
@@ -107,6 +109,20 @@ def test_analyze_raises_when_claude_refuses():
 
 def test_analyze_raises_when_response_has_no_content_blocks():
     client = _StopReasonClient("end_turn", content=[])
+    with pytest.raises(RuntimeError):
+        analyze(client, "hola", "hello")
+
+
+def test_analyze_skips_a_leading_thinking_block_and_returns_the_text_block():
+    thinking_block = SimpleNamespace(type="thinking", thinking="reasoning about the text...")
+    text_block = SimpleNamespace(type="text", text="# Analysis")
+    client = _StopReasonClient("end_turn", content=[thinking_block, text_block])
+    assert analyze(client, "hola", "hello") == "# Analysis"
+
+
+def test_analyze_raises_when_response_has_only_thinking_blocks():
+    thinking_block = SimpleNamespace(type="thinking", thinking="reasoning about the text...")
+    client = _StopReasonClient("end_turn", content=[thinking_block])
     with pytest.raises(RuntimeError):
         analyze(client, "hola", "hello")
 

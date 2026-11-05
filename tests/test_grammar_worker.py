@@ -6,7 +6,9 @@ from whisper_gui.grammar_worker import GrammarWorker
 
 class _FakeMessages:
     def create(self, **kwargs):
-        return SimpleNamespace(content=[SimpleNamespace(text="# Analysis")], stop_reason="end_turn")
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="# Analysis")], stop_reason="end_turn"
+        )
 
 
 class _FakeClient:

@@ -54,9 +54,10 @@ def analyze(client, original_text: str, english_text: str) -> str:
         )
     if response.stop_reason == "refusal":
         raise RuntimeError("Claude declined to analyze this transcript.")
-    if not response.content:
-        raise RuntimeError("Claude returned an empty response.")
-    return response.content[0].text
+    for block in response.content:
+        if getattr(block, "type", None) == "text":
+            return block.text
+    raise RuntimeError("Claude returned an empty response.")
 
 
 _client = None
