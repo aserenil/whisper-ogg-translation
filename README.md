@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/aserenil/whisper-ogg-translation/actions/workflows/tests.yml/badge.svg)](https://github.com/aserenil/whisper-ogg-translation/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/aserenil/whisper-ogg-translation.svg?style=flat)](https://github.com/aserenil/whisper-ogg-translation/stargazers)
 
 A desktop GUI (PySide6) for transcribing voice notes with OpenAI Whisper —
 original language + English translation, synced playback with the timed
