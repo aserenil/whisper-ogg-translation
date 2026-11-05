@@ -56,3 +56,13 @@ remove the pin to use the default CPU wheel), then re-run `uv sync`.
 - `tests/` — pytest suite
 - `plans/` — design and implementation plans for past features
 - `data/` — local transcription output (gitignored for personal recordings; see `.gitignore`)
+
+## Contributing
+
+1. Fork the repo and create a branch for your change.
+2. Follow the setup steps above to get a working environment.
+3. Add or update tests for any behavior change, and make sure `uv run pytest` passes.
+4. Open a pull request describing what changed and why.
+
+For anything beyond a small fix, please open an issue first to discuss the
+change before investing time in a PR.
