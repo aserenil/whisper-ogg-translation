@@ -5,6 +5,7 @@ import pytest
 import whisper_gui.grammar_analysis as grammar_analysis
 from whisper_gui.grammar_analysis import (
     MODEL,
+    MAX_OUTPUT_TOKENS,
     MAX_PROMPT_CHARS,
     analyze,
     build_prompt,
@@ -75,6 +76,13 @@ def test_analyze_sends_the_configured_model_and_the_built_prompt():
     analyze(client, "hola", "hello")
     assert client.messages.received_kwargs["model"] == MODEL
     assert "hola" in client.messages.received_kwargs["messages"][0]["content"]
+
+
+def test_analyze_requests_enough_output_tokens_for_a_full_analysis():
+    client = _FakeClient()
+    analyze(client, "hola", "hello")
+    assert client.messages.received_kwargs["max_tokens"] == MAX_OUTPUT_TOKENS
+    assert MAX_OUTPUT_TOKENS >= 16000
 
 
 def test_analyze_raises_without_calling_the_client_when_text_is_too_long():

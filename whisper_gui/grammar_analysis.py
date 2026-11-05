@@ -7,6 +7,10 @@ from whisper_gui.transcription import _backup_if_exists
 
 MODEL = "claude-sonnet-5-5"
 MAX_PROMPT_CHARS = 100_000
+# 16000 is the SDK-recommended non-streaming ceiling (stays under the HTTP
+# timeout); a full per-sentence breakdown + vocab + idioms list can otherwise
+# exceed a smaller cap on an ordinary multi-minute recording.
+MAX_OUTPUT_TOKENS = 16_000
 
 
 def build_prompt(original_text: str, english_text: str) -> str:
@@ -41,7 +45,7 @@ def analyze(client, original_text: str, english_text: str) -> str:
     validate_length(original_text, english_text)
     response = client.messages.create(
         model=MODEL,
-        max_tokens=4096,
+        max_tokens=MAX_OUTPUT_TOKENS,
         messages=[{"role": "user", "content": build_prompt(original_text, english_text)}],
     )
     if response.stop_reason == "max_tokens":
